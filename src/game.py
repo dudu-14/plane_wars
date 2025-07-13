@@ -134,6 +134,13 @@ class Game:
             volume=SOUND_VOLUME
         )
 
+        # 初始化道具管理器 - 1.1.0新增
+        from item import ItemManager
+        self.item_manager: ItemManager = ItemManager()
+
+        # 播放游戏开始音效 - 1.1.0新增
+        self.sound_manager.play_start()
+
     def handle_events(self) -> None:
         """处理游戏事件。
 
@@ -155,17 +162,17 @@ class Game:
         """处理玩家发射子弹。
 
         检查玩家是否可以发射子弹，如果可以则创建新的子弹对象并播放音效。
+        支持双发子弹模式（1.1.0新增）。
         """
-        bullet_pos: Optional[tuple[int, int]] = self.player.shoot()
-        if bullet_pos:
-            bullet: Bullet = Bullet(bullet_pos[0], bullet_pos[1], "player")
-            self.player_bullets.append(bullet)
+        bullet_positions = self.player.shoot()  # 现在返回位置列表
+        if bullet_positions:
+            # 为每个子弹位置创建子弹对象
+            for bullet_pos in bullet_positions:
+                bullet: Bullet = Bullet(bullet_pos[0], bullet_pos[1], "player")
+                self.player_bullets.append(bullet)
 
-            # 播放射击音效（每隔几发播放一次，避免音效过于密集）
-            self.shoot_sound_counter += 1
-            if self.shoot_sound_counter >= SHOOT_SOUND_INTERVAL:
-                self.sound_manager.play_shoot()
-                self.shoot_sound_counter = 0
+            # 播放射击音效 - 1.1.0更新
+            self.sound_manager.play_shot()
 
     def spawn_enemies(self) -> None:
         """生成敌机。
@@ -257,42 +264,67 @@ class Game:
 
         当玩家子弹击中敌机时，子弹消失，敌机受伤。
         如果敌机生命值归零，则敌机被摧毁，玩家获得分数。
+        1.1.0新增：音效和道具生成。
         """
         for bullet in self.player_bullets[:]:
             for enemy in self.enemies[:]:
                 if bullet.rect.colliderect(enemy.rect):
                     # 移除子弹
                     self.player_bullets.remove(bullet)
+
+                    # 播放敌机被击中音效 - 1.1.0新增
+                    if enemy.enemy_type == "small":
+                        self.sound_manager.play_hit_small()
+                    else:
+                        self.sound_manager.play_hit_medium()
+
                     # 敌机受伤
                     enemy.take_damage()
                     if not enemy.is_alive():
+                        # 记录敌机位置和类型用于道具生成
+                        enemy_x, enemy_y = enemy.x, enemy.y
+                        enemy_type = enemy.enemy_type
+
                         # 敌机被摧毁，增加分数并移除敌机
                         self.score += enemy.score
                         self.enemies.remove(enemy)
-                        # 播放击杀音效
-                        self.sound_manager.play_enemy_kill()
+
+                        # 播放爆炸音效 - 1.1.0更新
+                        self.sound_manager.play_explosion()
+
+                        # 生成道具 - 1.1.0新增
+                        self.item_manager.spawn_item(enemy_x, enemy_y, enemy_type)
+
                     break  # 子弹已被移除，跳出内层循环
 
     def _check_enemy_bullet_player_collision(self) -> None:
         """检查敌机子弹与玩家的碰撞。
 
         当敌机子弹击中玩家时，子弹消失，玩家受伤。
+        1.1.0新增：音效支持。
         """
         for bullet in self.enemy_bullets[:]:
             if bullet.rect.colliderect(self.player.rect):
                 self.enemy_bullets.remove(bullet)
-                self.player.take_damage()
+                # 检查是否实际受到伤害（护盾可能抵挡）
+                if self.player.take_damage():
+                    # 播放玩家被击中音效 - 1.1.0新增
+                    self.sound_manager.play_player_hit()
                 break  # 只处理一颗子弹的碰撞
 
     def _check_enemy_player_collision(self) -> None:
         """检查敌机与玩家的碰撞。
 
         当敌机直接撞击玩家时，敌机消失，玩家受伤。
+        1.1.0新增：音效支持。
         """
         for enemy in self.enemies[:]:
             if enemy.rect.colliderect(self.player.rect):
                 self.enemies.remove(enemy)
-                self.player.take_damage()
+                # 检查是否实际受到伤害（护盾可能抵挡）
+                if self.player.take_damage():
+                    # 播放玩家被击中音效 - 1.1.0新增
+                    self.sound_manager.play_player_hit()
                 break  # 只处理一个敌机的碰撞
 
     def update_game(self) -> None:
@@ -319,12 +351,20 @@ class Game:
             self.update_bullets()
             self.update_enemies()
 
+            # 更新道具系统 - 1.1.0新增
+            self.item_manager.update()
+
             # 检查所有碰撞
             self.check_collisions()
+
+            # 检查道具碰撞 - 1.1.0新增
+            self.check_item_collisions()
 
             # 检查游戏结束条件
             if not self.player.is_alive():
                 self.game_over = True
+                # 播放游戏结束音效 - 1.1.0新增
+                self.sound_manager.play_game_over()
 
     def draw_ui(self) -> None:
         """绘制用户界面。
@@ -349,6 +389,31 @@ class Game:
                         f"Lives: {self.player.lives}", True, WHITE
                     )
                 self.screen.blit(lives_text, (10, 50))
+
+                # 绘制生命值（新的健康系统） - 1.1.0新增
+                health_text: pygame.Surface = self.font.render(
+                    f"Health: {self.player.health}/{self.player.max_health}", True, WHITE
+                )
+                self.screen.blit(health_text, (10, 90))
+
+                # 绘制道具效果状态 - 1.1.0新增
+                power_status = self.player.get_power_up_status()
+                y_offset = 130
+
+                if power_status['double_shot']['active']:
+                    double_shot_text = self.font.render(
+                        f"Double Shot: {power_status['double_shot']['remaining']:.1f}s",
+                        True, YELLOW
+                    )
+                    self.screen.blit(double_shot_text, (SCREEN_WIDTH - 250, y_offset))
+                    y_offset += 30
+
+                if power_status['shield']['active']:
+                    shield_text = self.font.render(
+                        f"Shield: {power_status['shield']['remaining']:.1f}s",
+                        True, (0, 150, 255)
+                    )
+                    self.screen.blit(shield_text, (SCREEN_WIDTH - 250, y_offset))
 
                 # 绘制操作提示（仅在游戏进行中显示）
                 if not self.game_over:
@@ -490,6 +555,12 @@ class Game:
         self.player_bullets.clear()
         self.enemy_bullets.clear()
 
+        # 清空道具列表 - 1.1.0新增
+        self.item_manager.clear()
+
+        # 播放游戏开始音效 - 1.1.0新增
+        self.sound_manager.play_start()
+
     def draw(self) -> None:
         """绘制游戏画面。
 
@@ -530,6 +601,18 @@ class Game:
             bullet.draw(self.screen)
         for bullet in self.enemy_bullets:
             bullet.draw(self.screen)
+
+        # 绘制道具 - 1.1.0新增
+        self.item_manager.draw(self.screen)
+
+    def check_item_collisions(self) -> None:
+        """检查道具与玩家的碰撞 - 1.1.0新增"""
+        collected_items = self.item_manager.check_collision(self.player.rect)
+        for item in collected_items:
+            # 应用道具效果
+            if item.apply_effect(self.player):
+                # 播放道具拾取音效
+                self.sound_manager.play_item_pick()
 
     def run(self) -> None:
         """运行游戏主循环。
