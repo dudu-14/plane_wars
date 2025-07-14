@@ -40,7 +40,7 @@ def build_with_nuitka():
         '--standalone',                    # 独立模式，包含所有依赖
         '--onefile',                      # 单文件模式
         '--windows-disable-console',      # Windows下隐藏控制台
-        '--output-filename=PlaneWars',    # 输出文件名
+        '--output-filename=PlaneWars_v1.1.0',    # 输出文件名
         '--output-dir=dist',              # 输出目录
         '--remove-output',                # 编译后清理临时文件
         '--assume-yes-for-downloads',     # 自动下载依赖
@@ -52,6 +52,7 @@ def build_with_nuitka():
         '--include-module=player',        # 包含玩家模块
         '--include-module=enemy',         # 包含敌机模块
         '--include-module=bullet',        # 包含子弹模块
+        '--include-module=item',          # 包含道具模块
         '--include-module=game',          # 包含游戏主模块
         'main.py'                         # 主程序文件
     ]
@@ -62,8 +63,8 @@ def build_with_nuitka():
             '--windows-icon-from-ico=icon.ico' if os.path.exists('icon.ico') else '',
             '--windows-company-name=PlaneWars Game',
             '--windows-product-name=PlaneWars',
-            '--windows-file-version=1.0.0.0',
-            '--windows-product-version=1.0.0',
+            '--windows-file-version=1.1.0.0',
+            '--windows-product-version=1.1.0',
             '--windows-file-description=飞机大战游戏'
         ])
         # 移除空字符串
@@ -94,7 +95,7 @@ def build_optimized():
         '--standalone',
         '--onefile',
         '--windows-disable-console',
-        '--output-filename=PlaneWars_Optimized',
+        '--output-filename=PlaneWars_v1.1.0_Optimized',
         '--output-dir=dist',
         '--remove-output',
         '--assume-yes-for-downloads',
@@ -116,6 +117,7 @@ def build_optimized():
         '--include-module=player',
         '--include-module=enemy',
         '--include-module=bullet',
+        '--include-module=item',
         '--include-module=game',
         
         'main.py'
@@ -126,8 +128,8 @@ def build_optimized():
         cmd.extend([
             '--windows-company-name=PlaneWars Game',
             '--windows-product-name=PlaneWars Optimized',
-            '--windows-file-version=1.0.0.0',
-            '--windows-product-version=1.0.0'
+            '--windows-file-version=1.1.0.0',
+            '--windows-product-version=1.1.0'
         ])
     
     try:
@@ -146,21 +148,21 @@ def create_release_package():
     print("📦 创建发布包...")
     
     # 创建发布目录
-    release_dir = "release_nuitka"
+    release_dir = "releases/release_clean_v1.1.0"
     if os.path.exists(release_dir):
         shutil.rmtree(release_dir)
     os.makedirs(release_dir)
     
     # 查找编译后的可执行文件
     exe_files = []
-    if os.path.exists("dist/PlaneWars.exe"):
-        shutil.copy2("dist/PlaneWars.exe", f"{release_dir}/PlaneWars.exe")
-        exe_files.append("PlaneWars.exe")
+    if os.path.exists("dist/PlaneWars_v1.1.0.exe"):
+        shutil.copy2("dist/PlaneWars_v1.1.0.exe", f"{release_dir}/PlaneWars_v1.1.0.exe")
+        exe_files.append("PlaneWars_v1.1.0.exe")
         print("   ✅ 复制标准版可执行文件")
-    
-    if os.path.exists("dist/PlaneWars_Optimized.exe"):
-        shutil.copy2("dist/PlaneWars_Optimized.exe", f"{release_dir}/PlaneWars_Optimized.exe")
-        exe_files.append("PlaneWars_Optimized.exe")
+
+    if os.path.exists("dist/PlaneWars_v1.1.0_Optimized.exe"):
+        shutil.copy2("dist/PlaneWars_v1.1.0_Optimized.exe", f"{release_dir}/PlaneWars_v1.1.0_Optimized.exe")
+        exe_files.append("PlaneWars_v1.1.0_Optimized.exe")
         print("   ✅ 复制优化版可执行文件")
     
     if not exe_files:
@@ -250,30 +252,32 @@ def create_zip_packages():
     """创建ZIP压缩包"""
     print("🗜️ 创建压缩包...")
     
-    version = "v1.0.0"
+    version = "v1.1.0"
     zip_files = []
     
+    release_dir = "releases/release_clean_v1.1.0"
+
     # 标准版压缩包
-    if os.path.exists("release_nuitka/PlaneWars.exe"):
-        zip_name = f"PlaneWars_{version}_Nuitka_Windows_x64.zip"
+    if os.path.exists(f"{release_dir}/PlaneWars_v1.1.0.exe"):
+        zip_name = f"releases/PlaneWars_{version}_Nuitka_Windows_x64.zip"
         with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk("release_nuitka"):
+            for root, dirs, files in os.walk(release_dir):
                 for file in files:
                     if not file.endswith("_Optimized.exe"):  # 排除优化版本
                         file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, "release_nuitka")
+                        arcname = os.path.relpath(file_path, release_dir)
                         zipf.write(file_path, arcname)
         zip_files.append(zip_name)
         print(f"   ✅ 创建标准版: {zip_name}")
-    
+
     # 优化版压缩包
-    if os.path.exists("release_nuitka/PlaneWars_Optimized.exe"):
-        zip_name = f"PlaneWars_{version}_Nuitka_Optimized_Windows_x64.zip"
+    if os.path.exists(f"{release_dir}/PlaneWars_v1.1.0_Optimized.exe"):
+        zip_name = f"releases/PlaneWars_{version}_Nuitka_Optimized_Windows_x64.zip"
         with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk("release_nuitka"):
+            for root, dirs, files in os.walk(release_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, "release_nuitka")
+                    arcname = os.path.relpath(file_path, release_dir)
                     zipf.write(file_path, arcname)
         zip_files.append(zip_name)
         print(f"   ✅ 创建优化版: {zip_name}")
@@ -312,7 +316,7 @@ def main():
         print("\n🎉 Nuitka打包完成!")
         print("=" * 60)
         print("📁 生成的文件:")
-        print(f"   📂 release_nuitka/ - 发布目录")
+        print(f"   📂 releases/release_clean_v1.1.0/ - 发布目录")
         
         for zip_file in zip_files:
             file_size = os.path.getsize(zip_file) / (1024 * 1024)  # MB
